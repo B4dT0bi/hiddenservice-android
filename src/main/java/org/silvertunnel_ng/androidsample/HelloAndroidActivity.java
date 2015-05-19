@@ -1,28 +1,34 @@
 package org.silvertunnel_ng.androidsample;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.UnknownHostException;
+import android.app.Activity;
+import android.os.AsyncTask;
+import android.os.Bundle;
+import android.util.Log;
+import android.view.Menu;
+import android.widget.TextView;
+import android.widget.Toast;
 
+import org.silvertunnel_ng.androidsample.dexutil.DexHelper;
 import org.silvertunnel_ng.androidsample.instance.R;
 import org.silvertunnel_ng.netlib.api.NetFactory;
 import org.silvertunnel_ng.netlib.api.NetLayer;
 import org.silvertunnel_ng.netlib.api.NetLayerIDs;
 import org.silvertunnel_ng.netlib.api.NetSocket;
+import org.silvertunnel_ng.netlib.api.util.TcpipNetAddress;
 import org.silvertunnel_ng.netlib.layer.tor.TorHiddenServicePortPrivateNetAddress;
 import org.silvertunnel_ng.netlib.layer.tor.TorHiddenServicePrivateNetAddress;
 import org.silvertunnel_ng.netlib.layer.tor.TorNetLayerUtil;
 import org.silvertunnel_ng.netlib.layer.tor.TorNetServerSocket;
+import org.silvertunnel_ng.netlib.util.ByteArrayUtil;
+import org.silvertunnel_ng.netlib.util.HttpUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import android.app.Activity;
-import android.os.AsyncTask;
-import android.os.Bundle;
-import android.view.Menu;
-import android.widget.TextView;
-
-import org.silvertunnel_ng.androidsample.dexutil.DexHelper;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.UnknownHostException;
 
 public class HelloAndroidActivity extends Activity {
 
@@ -41,8 +47,10 @@ public class HelloAndroidActivity extends Activity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        dexHelper = new DexHelper(getApplicationContext(), getClassLoader());
+
         setContentView(R.layout.activity_main);
+
+        dexHelper = new DexHelper(getApplicationContext(), getClassLoader());
         bootstrapper = new BootStrapper();
         DexHelper[] helpers = {dexHelper};
         bootstrapper.execute(helpers);
@@ -73,7 +81,7 @@ public class HelloAndroidActivity extends Activity {
                 torNetLayerUtil = TorNetLayerUtil.getInstance();
 
                 System.out.println("Getting NetAddress");
-                netAddress = setupHiddenServiceKexyPair(torNetLayerUtil);
+                netAddress = setupHiddenServiceKeyPair(torNetLayerUtil);
                 final NetLayer netLayer = NetFactory.getInstance().getNetLayerById(NetLayerIDs.TOR);
                 System.out.println(netLayer.getStatus().toString());
                 new Thread() {
@@ -91,13 +99,33 @@ public class HelloAndroidActivity extends Activity {
                     }
                 }.start();
                 System.out.println(netLayer.getStatus().toString());
-//        System.out.println("Waiting... " + netAddress.toString());
-//        netLayer.waitUntilReady();
+                System.out.println("Waiting... " + netAddress.toString());
+                netLayer.waitUntilReady();
                 System.out.println("READY: " + netAddress.toString());
                 runOnUiThread(new Runnable() {
                     public void run() {
                         TextView txt = (TextView) findViewById(R.id.txt_info);
                         txt.setText(netAddress.toString());
+                    }
+                });
+
+                final String TORCHECK_HOSTNAME = "httptest.silvertunnel-ng.org";
+                final TcpipNetAddress TORCHECK_NETADDRESS = new TcpipNetAddress(TORCHECK_HOSTNAME, 80);
+
+                // create connection
+                final NetSocket topSocket = NetFactory.getInstance().getNetLayerById(NetLayerIDs.TOR_OVER_TLS_OVER_TCPIP)
+                        .createNetSocket(null, null, TORCHECK_NETADDRESS);
+
+                HttpUtil.getInstance();
+                // communicate with the remote side
+                final byte[] httpResponse = HttpUtil.get(topSocket, TORCHECK_NETADDRESS, "/checktor.php", 5000);
+                final String httpResponseStr = ByteArrayUtil.showAsString(httpResponse);
+
+                Log.d("AndroidSample", httpResponseStr);
+                runOnUiThread(new Runnable() {
+                    public void run() {
+                        TextView txt = (TextView) findViewById(R.id.txtStatus);
+                        txt.setText(httpResponseStr);
                     }
                 });
 
@@ -159,8 +187,8 @@ public class HelloAndroidActivity extends Activity {
         }
     }
 
-    private TorHiddenServicePortPrivateNetAddress setupHiddenServiceKexyPair(TorNetLayerUtil util)
-            throws UnknownHostException, IOException {
+    private TorHiddenServicePortPrivateNetAddress setupHiddenServiceKeyPair(TorNetLayerUtil util)
+            throws IOException {
         File directory = new File(getFilesDir().getPath() + File.separator + "hiddenServ");
         if (!(directory.exists() && directory.isDirectory())) {
             directory.mkdir();
@@ -172,7 +200,5 @@ public class HelloAndroidActivity extends Activity {
         TorHiddenServicePrivateNetAddress netAddress = util.readTorHiddenServicePrivateNetAddressFromFiles(directory, true);
         int port = 55555;
         return new TorHiddenServicePortPrivateNetAddress(netAddress, port);
-
     }
-
 }

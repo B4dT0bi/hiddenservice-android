@@ -13,6 +13,7 @@ import java.util.jar.JarOutputStream;
 import android.content.Context;
 import android.content.res.AssetManager;
 import android.util.Log;
+import android.widget.TextView;
 
 import dalvik.system.DexFile;
 
