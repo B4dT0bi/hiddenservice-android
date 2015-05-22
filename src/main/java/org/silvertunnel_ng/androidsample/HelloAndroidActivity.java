@@ -6,7 +6,6 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.Menu;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import org.silvertunnel_ng.androidsample.dexutil.DexHelper;
 import org.silvertunnel_ng.androidsample.instance.R;
@@ -19,16 +18,23 @@ import org.silvertunnel_ng.netlib.layer.tor.TorHiddenServicePortPrivateNetAddres
 import org.silvertunnel_ng.netlib.layer.tor.TorHiddenServicePrivateNetAddress;
 import org.silvertunnel_ng.netlib.layer.tor.TorNetLayerUtil;
 import org.silvertunnel_ng.netlib.layer.tor.TorNetServerSocket;
+import org.silvertunnel_ng.netlib.layer.tor.circuit.Circuit;
+import org.silvertunnel_ng.netlib.layer.tor.circuit.Node;
+import org.silvertunnel_ng.netlib.layer.tor.circuit.cells.CellRelayEstablishIntro;
+import org.silvertunnel_ng.netlib.layer.tor.hiddenservice.HiddenServiceProperties;
+import org.silvertunnel_ng.netlib.layer.tor.util.Encryption;
 import org.silvertunnel_ng.netlib.util.ByteArrayUtil;
 import org.silvertunnel_ng.netlib.util.HttpUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.net.UnknownHostException;
+import java.util.Arrays;
+import java.util.concurrent.ExecutorService;
 
 public class HelloAndroidActivity extends Activity {
 
@@ -104,7 +110,7 @@ public class HelloAndroidActivity extends Activity {
                 System.out.println("READY: " + netAddress.toString());
                 runOnUiThread(new Runnable() {
                     public void run() {
-                        TextView txt = (TextView) findViewById(R.id.txt_info);
+                        TextView txt = (TextView) findViewById(R.id.txtHiddenserviceAddress);
                         txt.setText(netAddress.toString());
                     }
                 });
@@ -124,13 +130,32 @@ public class HelloAndroidActivity extends Activity {
                 Log.d("AndroidSample", httpResponseStr);
                 runOnUiThread(new Runnable() {
                     public void run() {
-                        TextView txt = (TextView) findViewById(R.id.txtStatus);
-                        txt.setText(httpResponseStr);
+                        TextView txt = (TextView) findViewById(R.id.txtHttpOverTorResult);
+                        txt.setText("HttpOverTor result : " + httpResponseStr);
+                    }
+                });
+
+                String statusAccessHS = "failed to access hiddenservice";
+
+
+                try {
+                    if (openHiddenService(SILVERTUNNEL_HOSTNAME, 80).contains("httptest works.")) {
+                        statusAccessHS = "Access to hiddenservice is working!";
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+                final String txtStatusHs = statusAccessHS;
+                runOnUiThread(new Runnable() {
+                    public void run() {
+                        TextView txt = (TextView) findViewById(R.id.txtAccessHiddenService);
+                        txt.setText(txtStatusHs);
                     }
                 });
 
                 final TorNetServerSocket netServerSocket = (TorNetServerSocket) netLayer
                         .createNetServerSocket(null, netAddress);
+
                 new Thread() {
                     public void run() {
                         while (true) {
@@ -182,9 +207,62 @@ public class HelloAndroidActivity extends Activity {
 
         @Override
         protected void onPostExecute(Void result) {
-            TextView txt = (TextView) findViewById(R.id.txt_info);
+            TextView txt = (TextView) findViewById(R.id.txtHiddenserviceAddress);
             txt.setText(netAddress.toString());
         }
+    }
+
+    /**
+     * onion address of SilverTunnel-NG's test hidden service.
+     */
+    private static final String SILVERTUNNEL_HOSTNAME = "h6hk2h7fnr66d4o3.onion";
+
+    private static final long TIMEOUT = 30000;
+
+    /**
+     * Open a connection to the given hidden service and read the whole content.
+     *
+     * @param onionAddress the *.onion address
+     * @param port         the port
+     * @return a string containing the http response body
+     * @throws Exception in case of error
+     */
+    private String openHiddenService(final String onionAddress, final int port) throws Exception {
+        final TcpipNetAddress netAddress = new TcpipNetAddress(onionAddress, port);
+        String result = "";
+        // create connection
+        NetSocket topSocket = null;
+        try {
+            topSocket = NetFactory.getInstance().getNetLayerById(NetLayerIDs.TOR_OVER_TLS_OVER_TCPIP)
+                    .createNetSocket(null, null, netAddress);
+
+            HttpUtil.getInstance();
+            // communicate with the remote side
+            final byte[] httpResponse = HttpUtil.get(topSocket, netAddress, "/", TIMEOUT);
+            String httpResponseStr = ByteArrayUtil.showAsString(httpResponse);
+            Log.d("AccessHiddenservice", "http response body: " + httpResponseStr);
+
+            // make the httpResponseStr readable in HTML reports
+            result = removeHtmlTags(httpResponseStr);
+        } finally {
+            if (topSocket != null) {
+                topSocket.close();
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Helper method to remove all HTML Tags.
+     *
+     * @param htmlText the HTML to be processed
+     * @return the given HTML-text without the tags
+     */
+    private static String removeHtmlTags(final String htmlText) {
+        String result = htmlText;
+        result = result.replaceAll("<style.+?</style>", "");
+        result = result.replaceAll("<.+?>", "");
+        return result;
     }
 
     private TorHiddenServicePortPrivateNetAddress setupHiddenServiceKeyPair(TorNetLayerUtil util)

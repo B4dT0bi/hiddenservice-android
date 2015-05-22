@@ -7,17 +7,27 @@
     android:paddingTop="@dimen/activity_vertical_margin" >
 
     <TextView
-        android:id="@+id/txt_info"
+        android:id="@+id/txtHiddenserviceAddress"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/loading" />
 
     <TextView
-        android:id="@+id/txtStatus"
+        android:id="@+id/txtHttpOverTorResult"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/loading"
-        android:layout_below="@+id/txt_info"
+        android:layout_below="@+id/txtHiddenserviceAddress"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentStart="true" />
+
+
+    <TextView
+        android:id="@+id/txtAccessHiddenService"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/loading"
+        android:layout_below="@+id/txtHttpOverTorResult"
         android:layout_alignParentLeft="true"
         android:layout_alignParentStart="true" />
 
